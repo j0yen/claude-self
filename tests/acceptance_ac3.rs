@@ -13,10 +13,80 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use std::fs;
+use std::path::Path;
+use tempfile::TempDir;
+
+fn good_body() -> String {
+    "# Header\n\
+## Voice\n- Terse.\n\
+## Values\n- Honest.\n\
+## Defaults\n- Parallel.\n\
+## Things I keep getting wrong\n- Over-narrating.\n\
+## Aspirations\n- Be a collaborator.\n\
+## Boundaries\n- No irreversible ops.\n\
+## Changelog\n- 2026-05-23 (Claude): seed.\n"
+        .to_string()
+}
+
+fn run_lint(tmp: &Path, live: &Path) -> assert_cmd::assert::Assert {
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp)
+        .env("CLAUDE_SELF_FILE", live)
+        .arg("lint")
+        .assert()
+}
+
 #[test]
-fn acceptance_ac3() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC3 not yet implemented — see file header");
+fn acceptance_ac3_good_file_lints_clean_exit_zero() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    fs::write(&live, good_body()).unwrap();
+    run_lint(tmp.path(), &live).success();
+}
+
+#[test]
+fn ac3_section_mismatch_exits_one() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    // Missing the Changelog section.
+    let bad = good_body().replace("## Changelog\n- 2026-05-23 (Claude): seed.\n", "");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1);
+}
+
+#[test]
+fn ac3_over_200_lines_exits_one() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let mut bad = good_body();
+    // Pad inside the Voice section past the 200-line cap.
+    let mut pad = String::new();
+    for i in 0..220 {
+        pad.push_str(&format!("- pad{i}\n"));
+    }
+    bad = bad.replacen("## Voice\n- Terse.\n", &format!("## Voice\n- Terse.\n{pad}"), 1);
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1);
+}
+
+#[test]
+fn ac3_empty_aspirations_exits_one() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let bad = good_body().replace("- Be a collaborator.\n", "");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1);
+}
+
+#[test]
+fn ac3_duplicate_bullets_exits_one() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let bad = good_body().replace("## Values\n- Honest.\n", "## Values\n- Honest.\n- Honest.\n");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1);
 }

@@ -13,10 +13,34 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use tempfile::TempDir;
+
 #[test]
-fn acceptance_ac1() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC1 not yet implemented — see file header");
+fn acceptance_ac1_path_default_resolves_under_home() {
+    let tmp = TempDir::new().unwrap();
+    let expected = tmp.path().join(".claude").join("CLAUDE_SELF.md");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .arg("path")
+        .assert()
+        .success()
+        .stdout(format!("{}\n", expected.display()));
+}
+
+#[test]
+fn ac1_path_env_override_wins() {
+    let tmp = TempDir::new().unwrap();
+    let explicit = tmp.path().join("custom-self.md");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &explicit)
+        .arg("path")
+        .assert()
+        .success()
+        .stdout(format!("{}\n", explicit.display()));
 }

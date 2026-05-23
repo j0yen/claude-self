@@ -13,10 +13,36 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use predicates::str::contains;
+use tempfile::TempDir;
+
 #[test]
-fn acceptance_ac7() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC7 not yet implemented — see file header");
+fn acceptance_ac7_log_missing_dotfiles_repo_exits_two_with_diagnostic() {
+    let tmp = TempDir::new().unwrap();
+    let absent_dotfiles = tmp.path().join("no-dotfiles");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_DOTFILES", &absent_dotfiles)
+        .arg("log")
+        .assert()
+        .code(2)
+        .stderr(contains("dotfiles repo not found"));
+}
+
+#[test]
+fn ac7_diff_missing_dotfiles_repo_exits_two_with_diagnostic() {
+    let tmp = TempDir::new().unwrap();
+    let absent_dotfiles = tmp.path().join("no-dotfiles");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_DOTFILES", &absent_dotfiles)
+        .arg("diff")
+        .assert()
+        .code(2)
+        .stderr(contains("dotfiles repo not found"));
 }

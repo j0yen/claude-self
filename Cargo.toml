@@ -56,3 +56,6 @@ panic = "abort"
 
 [dev-dependencies]
 proptest = "1"
+assert_cmd = "2"
+tempfile = "3"
+predicates = "3"

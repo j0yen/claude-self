@@ -13,10 +13,70 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use predicates::str::contains;
+use std::fs;
+use std::path::Path;
+use tempfile::TempDir;
+
+fn good_body() -> String {
+    "# Header\n\
+## Voice\n- Terse.\n\
+## Values\n- Honest.\n\
+## Defaults\n- Parallel.\n\
+## Things I keep getting wrong\n- Over-narrating.\n\
+## Aspirations\n- Be a collaborator.\n\
+## Boundaries\n- No irreversible ops.\n\
+## Changelog\n- 2026-05-23 (Claude): seed.\n"
+        .to_string()
+}
+
+fn run_lint(tmp: &Path, live: &Path) -> assert_cmd::assert::Assert {
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp)
+        .env("CLAUDE_SELF_FILE", live)
+        .arg("lint")
+        .assert()
+}
+
 #[test]
-fn acceptance_ac8() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC8 not yet implemented — see file header");
+fn acceptance_ac8_line_count_diagnostic_names_rule() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let mut pad = String::new();
+    for i in 0..220 {
+        pad.push_str(&format!("- pad{i}\n"));
+    }
+    let bad = good_body().replacen("## Voice\n- Terse.\n", &format!("## Voice\n- Terse.\n{pad}"), 1);
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1).stderr(contains("line-count"));
+}
+
+#[test]
+fn ac8_section_mismatch_diagnostic_names_rule() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let bad = good_body().replace("## Changelog\n- 2026-05-23 (Claude): seed.\n", "");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1).stderr(contains("section-mismatch"));
+}
+
+#[test]
+fn ac8_empty_aspirations_diagnostic_names_rule() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let bad = good_body().replace("- Be a collaborator.\n", "");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1).stderr(contains("empty-aspirations"));
+}
+
+#[test]
+fn ac8_duplicate_bullets_diagnostic_names_rule() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let bad = good_body().replace("## Values\n- Honest.\n", "## Values\n- Honest.\n- Honest.\n");
+    fs::write(&live, bad).unwrap();
+    run_lint(tmp.path(), &live).code(1).stderr(contains("duplicate-bullets"));
 }

@@ -13,10 +13,39 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use predicates::str::contains;
+use std::fs;
+use tempfile::TempDir;
+
 #[test]
-fn acceptance_ac2() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC2 not yet implemented — see file header");
+fn acceptance_ac2_show_emits_file_contents_when_present() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    let body = "## Voice\n- terse\n";
+    fs::write(&live, body).unwrap();
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .arg("show")
+        .assert()
+        .success()
+        .stdout(body);
+}
+
+#[test]
+fn ac2_show_exits_2_with_diagnostic_when_missing() {
+    let tmp = TempDir::new().unwrap();
+    let missing = tmp.path().join("nope.md");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &missing)
+        .arg("show")
+        .assert()
+        .code(2)
+        .stderr(contains("not found"));
 }

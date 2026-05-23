@@ -13,10 +13,58 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use predicates::str::contains;
+use tempfile::TempDir;
+
+const SUBS: [&str; 8] = ["show", "edit", "lint", "log", "diff", "default-restore", "path", "help"];
+
+fn assert_usage_contains_subcommands(stdout: &str) {
+    for sub in SUBS {
+        assert!(stdout.contains(sub), "usage missing subcommand {sub}\nfull:\n{stdout}");
+    }
+}
+
 #[test]
-fn acceptance_ac6() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC6 not yet implemented — see file header");
+fn acceptance_ac6_help_prints_usage_listing_all_subcommands() {
+    let tmp = TempDir::new().unwrap();
+    let out = Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .arg("help")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_usage_contains_subcommands(&stdout);
+}
+
+#[test]
+fn ac6_no_subcommand_prints_usage() {
+    let tmp = TempDir::new().unwrap();
+    let out = Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_usage_contains_subcommands(&stdout);
+}
+
+#[test]
+fn ac6_unknown_subcommand_exits_two() {
+    let tmp = TempDir::new().unwrap();
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .arg("not-a-subcommand")
+        .assert()
+        .code(2)
+        .stderr(contains("unknown subcommand"));
 }

@@ -13,10 +13,82 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use std::fs;
+use tempfile::TempDir;
+
+fn lint_clean_default_body() -> String {
+    // A default template that lints clean: 7 sections in order, non-empty
+    // aspirations, <=200 lines, no duplicate bullets.
+    "# Default\n\
+## Voice\n- (one per pref)\n\
+## Values\n- (one per value)\n\
+## Defaults\n- (one per default)\n\
+## Things I keep getting wrong\n- (observation)\n\
+## Aspirations\n- be a collaborator\n\
+## Boundaries\n- (one hard limit)\n\
+## Changelog\n- YYYY-MM-DD (author): note.\n"
+        .to_string()
+}
+
 #[test]
-fn acceptance_ac5() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC5 not yet implemented — see file header");
+fn acceptance_ac5_default_restore_yes_overwrites_and_lints_clean() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("live.md");
+    let default = tmp.path().join("default.md");
+    fs::write(&live, "stale junk\n").unwrap();
+    fs::write(&default, lint_clean_default_body()).unwrap();
+
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .env("CLAUDE_SELF_DEFAULT", &default)
+        .args(["default-restore", "--yes"])
+        .assert()
+        .success();
+
+    let restored = fs::read_to_string(&live).unwrap();
+    assert_eq!(restored, lint_clean_default_body());
+}
+
+#[test]
+fn ac5_without_yes_exits_one_and_does_not_modify() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("live.md");
+    let default = tmp.path().join("default.md");
+    let original = "do not touch me\n";
+    fs::write(&live, original).unwrap();
+    fs::write(&default, lint_clean_default_body()).unwrap();
+
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .env("CLAUDE_SELF_DEFAULT", &default)
+        .arg("default-restore")
+        .assert()
+        .code(1);
+
+    let untouched = fs::read_to_string(&live).unwrap();
+    assert_eq!(untouched, original, "live file must remain untouched without --yes");
+}
+
+#[test]
+fn ac5_default_missing_exits_two() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("live.md");
+    let default = tmp.path().join("does-not-exist.md");
+    fs::write(&live, "x\n").unwrap();
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .env("CLAUDE_SELF_DEFAULT", &default)
+        .args(["default-restore", "--yes"])
+        .assert()
+        .code(2);
 }

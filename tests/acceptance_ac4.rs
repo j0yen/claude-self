@@ -13,10 +13,70 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::doc_markdown)]
 
+use assert_cmd::Command;
+use std::fs;
+use tempfile::TempDir;
+
+fn good_body() -> String {
+    "# Header\n\
+## Voice\n- Terse.\n\
+## Values\n- Honest.\n\
+## Defaults\n- Parallel.\n\
+## Things I keep getting wrong\n- Over-narrating.\n\
+## Aspirations\n- Be a collaborator.\n\
+## Boundaries\n- No irreversible ops.\n\
+## Changelog\n- 2026-05-23 (Claude): seed.\n"
+        .to_string()
+}
+
 #[test]
-fn acceptance_ac4() {
-    // edit-agent: replace this stub with a real assertion. The
-    // panic keeps the test failing until you do, so the loop
-    // sees a real Stage 3 signal.
-    panic!("AC AC4 not yet implemented — see file header");
+fn acceptance_ac4_quiet_suppresses_output_on_pass() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    fs::write(&live, good_body()).unwrap();
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .args(["lint", "--quiet"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr("");
+}
+
+#[test]
+fn ac4_quiet_suppresses_output_on_fail() {
+    let tmp = TempDir::new().unwrap();
+    let live = tmp.path().join("self.md");
+    // Missing the Changelog section -> lint fails.
+    let bad = good_body().replace("## Changelog\n- 2026-05-23 (Claude): seed.\n", "");
+    fs::write(&live, bad).unwrap();
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &live)
+        .args(["lint", "--quiet"])
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr("");
+}
+
+#[test]
+fn ac4_quiet_preserves_missing_file_code_two() {
+    let tmp = TempDir::new().unwrap();
+    let missing = tmp.path().join("nope.md");
+    Command::cargo_bin("claude-self")
+        .unwrap()
+        .env_clear()
+        .env("HOME", tmp.path())
+        .env("CLAUDE_SELF_FILE", &missing)
+        .args(["lint", "--quiet"])
+        .assert()
+        .code(2)
+        .stdout("")
+        .stderr("");
 }
