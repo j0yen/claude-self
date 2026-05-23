@@ -1,0 +1,143 @@
+{
+  "schema": "autobuilder.intent_card.v1",
+  "prd_source": "/home/jsy/projects/autobuilder/PRD-claude-self.md",
+  "intent_slug": "claude-self",
+  "root_motivation": "Replace ad-hoc bash drafts of `claude-self` with a Rust CLI that maintains a stable `CLAUDE_SELF.md` (voice/values/defaults) at `~/.claude/CLAUDE_SELF.md`. The lint contract (canonical sections, length cap, non-empty Aspirations, no duplicate bullets) is the load-bearing piece — without it the file rots into a bland, drift-prone catch-all and the per-session 'self model' reassembly remains lossy.",
+  "user_persona": "Single developer (Joe) co-editing a 7-section markdown file with Claude on one laptop. Runs `claude-self lint` to validate after edits, `claude-self show` to inspect, `claude-self diff`/`log` to track history, `claude-self default-restore` to recover.",
+  "unfakeable_metric": {
+    "name": "acceptance_tests_passing",
+    "lower_is_better": false,
+    "harness_command": "cargo test --workspace --test 'acceptance_*' -- --format json -Z unstable-options 2>/dev/null | grep -c '\"event\":\"ok\"' || true",
+    "target": null
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "level": "MUST",
+      "description": "`claude-self path` prints the resolved live-file path (default `$HOME/.claude/CLAUDE_SELF.md`, overridable via `CLAUDE_SELF_FILE`) to stdout and exits 0.",
+      "test": "tests/acceptance_ac1.rs"
+    },
+    {
+      "id": "AC2",
+      "level": "MUST",
+      "description": "`claude-self show` writes the live file's contents to stdout when present (exit 0); exits 2 with diagnostic on stderr when missing.",
+      "test": "tests/acceptance_ac2.rs"
+    },
+    {
+      "id": "AC3",
+      "level": "MUST",
+      "description": "`claude-self lint` enforces the four lint rules: (a) exactly the seven canonical section headers in order [Voice, Values, Defaults, Things I keep getting wrong, Aspirations, Boundaries, Changelog], (b) total length <= 200 lines, (c) Aspirations section has at least one non-empty bullet, (d) no duplicate bullets within any section. Exit 0 on pass, 1 on any rule violation.",
+      "test": "tests/acceptance_ac3.rs"
+    },
+    {
+      "id": "AC4",
+      "level": "MUST",
+      "description": "`claude-self lint --quiet` suppresses all stdout/stderr output and preserves the same exit code as non-quiet mode.",
+      "test": "tests/acceptance_ac4.rs"
+    },
+    {
+      "id": "AC5",
+      "level": "MUST",
+      "description": "`claude-self default-restore --yes` overwrites the live file from `$HOME/.claude/CLAUDE_SELF.default.md` (overridable via `CLAUDE_SELF_DEFAULT`), runs lint on the result, and exits 0 when the default file lints clean. Without `--yes` exits 1 without modifying the live file (interactive confirmation is out of scope for tests).",
+      "test": "tests/acceptance_ac5.rs"
+    },
+    {
+      "id": "AC6",
+      "level": "MUST",
+      "description": "`claude-self help` (and `claude-self` with no subcommand) prints usage listing all subcommands [show, edit, lint, log, diff, default-restore, path, help] and exits 0. Unknown subcommands exit 2.",
+      "test": "tests/acceptance_ac6.rs"
+    },
+    {
+      "id": "AC7",
+      "level": "SHOULD",
+      "description": "`claude-self log` and `claude-self diff [REF]` shell out to git in the dotfiles repo (path overridable via `CLAUDE_DOTFILES`) restricted to the live file's tracked path; when the dotfiles repo is missing, exit 2 with a clear diagnostic. Implementation may delegate to `git`; the test asserts the diagnostic path when no repo exists.",
+      "test": "tests/acceptance_ac7.rs"
+    },
+    {
+      "id": "AC8",
+      "level": "SHOULD",
+      "description": "Lint diagnostics on failure name the specific rule(s) violated (line-count, section-mismatch, empty-aspirations, duplicate-bullets) on stderr so the user knows what to fix.",
+      "test": "tests/acceptance_ac8.rs"
+    }
+  ],
+  "scope": [
+    "A Rust CLI binary `claude-self` with subcommands: show, lint, log, diff, default-restore, path, help (edit is a thin wrapper around $EDITOR + lint, MAY-tier).",
+    "Linter that enforces the four PRD-§4.4 rules with rule-named diagnostics.",
+    "Resolution of live-file path via `CLAUDE_SELF_FILE` env var (default `$HOME/.claude/CLAUDE_SELF.md`).",
+    "Resolution of default-file path via `CLAUDE_SELF_DEFAULT` env var (default `$HOME/.claude/CLAUDE_SELF.default.md`).",
+    "Resolution of dotfiles repo via `CLAUDE_DOTFILES` env var (default `$HOME/dotfiles`).",
+    "`default-restore --yes` non-interactive flag (testable; the bash draft's interactive `yes` prompt is preserved as default behavior but `--yes` short-circuits)."
+  ],
+  "non_goals": [
+    "Wiring the SessionStart hook in `~/.claude/settings.json` (out-of-scope per orchestrator brief; PRD §5 calls this out separately).",
+    "Editor integration beyond shelling out to `$EDITOR` (covered as MAY).",
+    "Cross-machine sync; `git clone` is the model (PRD §6.4).",
+    "Self-modification at runtime / Claude proposing edits without user approval (PRD §6.6); the CLI does not implement a propose-and-approve flow.",
+    "Replacing CLAUDE.md or recall memories (PRD §6.1, §6.2).",
+    "Any GUI / TUI; CLI-only.",
+    "Network / cloud features.",
+    "Auto-generating Changelog entries; the user (or Claude with approval) writes them by hand."
+  ],
+  "hard_constraints": {
+    "rust_edition": "2024",
+    "target_kind": "cli",
+    "deny_unsafe": true,
+    "max_deps": 6,
+    "msrv": "1.85",
+    "additional": {
+      "lint_max_lines": "200",
+      "canonical_sections_count": "7",
+      "out_of_scope_hook_wiring": "true",
+      "supersedes_drafts": "/home/jsy/dotfiles/.local/bin/claude-self (bash), /home/jsy/dotfiles/.claude/scripts/claude-self-start.sh (bash)"
+    }
+  },
+  "five_whys_trace": [
+    {
+      "why": 1,
+      "q": "Why do you want a Rust `claude-self` CLI when the bash draft already works?",
+      "a": "The bash draft has zero tests and silently misbehaves on malformed input (e.g. empty Aspirations section detection uses fragile awk). A Rust binary with acceptance tests is the only way the lint contract becomes a contract — without that, the 200-line cap and seven-section invariant rot the first time the file grows."
+    },
+    {
+      "why": 2,
+      "q": "Why does the lint contract matter more than just having any file there?",
+      "a": "Because identity is performative (PRD §8). The file's value is in being *short, structured, and rereadable every session*. If lint doesn't fail loudly when the file drifts to 300 lines or sprouts a new section, the file becomes a junk drawer and stops being load-bearing."
+    },
+    {
+      "why": 3,
+      "q": "Why is rereadability per-session the hinge?",
+      "a": "Today the 'how I aim to work' content scatters across `feedback_*.md` recall memories, CLAUDE.md preamble, and the user's running corrections. Each session reassembles a 'Claude personality' from those pieces and the assembly is lossy. A single canonical file loaded every session is the only way to stop the lossy reassembly. The lint contract is what keeps the file canonical."
+    },
+    {
+      "why": 4,
+      "q": "Why a Rust CLI instead of just a markdown file the user maintains by hand?",
+      "a": "Because past-Claude already proved this with the bash draft: the moment lint isn't mechanical, drift wins. The user wants `claude-self edit` with lint-on-save and `claude-self default-restore` so resets are recoverable. The CLI is the discipline; the markdown file is the artifact."
+    }
+  ],
+  "ambiguities_resolved": [
+    {
+      "question": "PRD §5 says '~80 LoC of bash' — is the autobuilder mandate to translate that to Rust, or to supersede the bash drafts entirely?",
+      "resolution": "Supersede. The bash drafts at `~/dotfiles/.local/bin/claude-self` and `~/dotfiles/.claude/scripts/claude-self-start.sh` are reference, not source-of-truth. The Rust binary is the new source-of-truth; the bash drafts remain at the dotfiles path until manually retired by the user."
+    },
+    {
+      "question": "PRD §4.1 'Loading' via SessionStart hook — is the CLI responsible for wiring this?",
+      "resolution": "No. Orchestrator brief explicitly says 'WIRING IS OUT OF SCOPE.' The CLI exists; wiring is a separate user action."
+    },
+    {
+      "question": "PRD §4.2 'Editing' requires user-approval-in-the-same-turn for Claude's edits. How does a CLI test this?",
+      "resolution": "It cannot, because the approval flow is a Claude-side convention, not a CLI feature. The `edit` subcommand is a thin `$EDITOR` wrapper; user-approval gating is enforced by Claude at the conversation layer (PRD §7 Phase 2), not by `claude-self`. Out of MUST scope; MAY-tier."
+    },
+    {
+      "question": "PRD §4.4 says 'failure to lint blocks a save.' Does the CLI implement a hard save-block?",
+      "resolution": "Per the bash draft `cmd_edit`, lint failure offers re-edit / accept-anyway / quit. We mirror that in `edit` (MAY). For the core lint subcommand (AC3), failure exits 1 and the file is unchanged; the calling workflow decides whether to retry."
+    },
+    {
+      "question": "The PRD mentions 'mirror' (PRD §7 Phase 3) integration. In scope?",
+      "resolution": "No — that's a future phase and depends on a separate PRD. Out of MUST scope."
+    },
+    {
+      "question": "Should the CLI handle `~/.claude/` not being a git repo (PRD §4.3)?",
+      "resolution": "Yes — `log` and `diff` shell out to git in `$CLAUDE_DOTFILES` (default `$HOME/dotfiles`) since the existing convention already has the file living in the dotfiles tree. If the repo is missing, exit 2 with a diagnostic (AC7). The CLI does not auto-initialize a git repo."
+    }
+  ],
+  "created_at": "2026-05-23T09:10:25Z"
+}
