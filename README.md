@@ -2,6 +2,24 @@
 
 > Replace ad-hoc bash drafts of `claude-self` with a Rust CLI that maintains a stable `CLAUDE_SELF.md` (voice/values/defaults) at `~/.claude/CLAUDE_SELF.md`.
 
+## Install
+
+### One-liner
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/j0yen/claude-self/main/install.sh | bash
+```
+
+### Manual
+
+```sh
+git clone --depth 1 https://github.com/j0yen/claude-self.git
+cd claude-self
+./install.sh
+```
+
+Installs the `claude-self` binary via `cargo install --path . --locked`. Requires `cargo` / `rustc 1.85+` and `git`. Built binary lands in `~/.cargo/bin/`.
+
 ## Why
 
 Replace ad-hoc bash drafts of `claude-self` with a Rust CLI that maintains a stable `CLAUDE_SELF.md` (voice/values/defaults) at `~/.claude/CLAUDE_SELF.md`. The lint contract (canonical sections, length cap, non-empty Aspirations, no duplicate bullets) is the load-bearing piece — without it the file rots into a bland, drift-prone catch-all and the per-session 'self model' reassembly remains lossy.
